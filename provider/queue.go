@@ -42,13 +42,29 @@ func (q *Queue) Enqueue(cid cid.Cid) error {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	nextKey := q.queueKey(q.tail)
+	nextKey := queueKey(q.name, q.tail)
 
 	if err := q.datastore.Put(nextKey, cid.Bytes()); err != nil {
 		return err
 	}
 
 	q.tail++
+	return nil
+}
+
+func (q *Queue) Requeue(cid cid.Cid) error {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	// could also modify head, but then would have to deal with head < 0
+	// there would have to be a guarantee that you can't fail more things than
+	// the queue has ever contained
+	key := queueKey(q.name, q.head)
+
+	if err := q.datastore.Put(key, cid.Bytes()); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -61,7 +77,7 @@ func (q *Queue) Dequeue() (cid.Cid, error) {
 		return cid.Undef, errors.New("queue is empty")
 	}
 
-	nextKey := q.queueKey(q.head)
+	nextKey := queueKey(q.name, q.head)
 	value, err := q.datastore.Get(nextKey)
 	if err != nil {
 		return cid.Undef, err
@@ -77,6 +93,7 @@ func (q *Queue) Dequeue() (cid.Cid, error) {
 	}
 
 	q.head++
+
 	return key, nil
 }
 
@@ -88,8 +105,8 @@ func (q *Queue) Length() uint64 {
 	return q.tail - q.head
 }
 
-func (q *Queue) queueKey(id uint64) ds.Key {
-	return ds.NewKey(queuePrefix(q.name) + strconv.FormatUint(id, 10))
+func queueKey(name string, id uint64) ds.Key {
+	return ds.NewKey(queuePrefix(name) + strconv.FormatUint(id, 10))
 }
 
 func queuePrefix(name string) string {

@@ -88,7 +88,6 @@ func (p *Provider) announce(cid cid.Cid) error {
 	return nil
 }
 
-// Handle all outgoing cids by providing (announcing) them
 func (p *Provider) handleAnnouncements() {
 	for workers := 0; workers < provideOutgoingWorkerLimit; workers++ {
 		go func() {
@@ -127,6 +126,9 @@ func (p *Provider) handleAnnouncements() {
 
 				if err := p.announce(cid); err != nil {
 					log.Warningf("Unable to announce providing: %s, %s", cid, err)
+					if err := p.queue.Requeue(cid); err != nil {
+						log.Warningf("Unable to reject entry: %s, %s", cid, err)
+					}
 					continue
 				}
 
